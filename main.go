@@ -12,6 +12,7 @@ import (
 
 	"prcht/internal/authserver"
 	"prcht/internal/chat"
+	rb "prcht/internal/ringbuffer"
 	"prcht/internal/userdata"
 
 	"github.com/gorilla/websocket"
@@ -113,7 +114,7 @@ func main() {
 		Nick:   new(string),
 		Msg:    new(string),
 		Join:   []byte("#" + ud.Join + " :"),
-		Status: new([10]string),
+		Status: rb.NewRB[string](10),
 	}
 	users := make(map[string]*chat.User)
 	go func() {
@@ -147,10 +148,9 @@ func main() {
 						zap.Error(err))
 					continue
 				}
-				fmt.Println(*chatMsg.Nick, *chatMsg.Msg)
 				*chatMsg.Nick = ""
 				*chatMsg.Msg = ""
-				*chatMsg.Status = [10]string{}
+				chatMsg.Status.Reset()
 			}
 		}
 	}()

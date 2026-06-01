@@ -4,13 +4,15 @@ package chat
 
 import (
 	"fmt"
+
+	rb "prcht/internal/ringbuffer"
 )
 
 // User represents user in chat
 type User struct {
-	Nick   string
-	Badges [10]string
-	msgs   [100]string
+	nick   string
+	badges *rb.RingBuffer[string]
+	msgs   *rb.RingBuffer[string]
 }
 
 // newMessage create new message for user or update existing
@@ -23,23 +25,23 @@ func newMessage(users map[string]*User, chatmsg *ChatMessage, rawMsg []byte) err
 
 	user, ok := users[*chatmsg.Nick]
 	if !ok {
-		msgs := [100]string{}
+		msgs := rb.NewRB[string](100)
 
 		user = &User{
-			Nick:   *chatmsg.Nick,
-			Badges: *chatmsg.Status,
+			nick:   *chatmsg.Nick,
+			badges: chatmsg.Status,
 			msgs:   msgs,
 		}
 		users[*chatmsg.Nick] = user
 	}
 
-	user.msgs[len(user.msgs)-1] = *chatmsg.Msg
+	user.msgs.Write(*chatmsg.Msg)
 
 	return nil
 }
 
-// getMessages iterate over messages for user
-func getMessages(users map[string]*User, nick string, yield func(msg string)) error {
+// GetMessages iterate over messages for user
+func GetMessages(users map[string]*User, nick string, yield func(msg string)) error {
 	const op = "chat.GetMessages"
 
 	user, ok := users[nick]
@@ -47,15 +49,13 @@ func getMessages(users map[string]*User, nick string, yield func(msg string)) er
 		return fmt.Errorf("%s: user not found", op)
 	}
 
-	for _, msg := range user.msgs {
-		yield(msg)
-	}
+	user.msgs.ForEach(yield)
 
 	return nil
 }
 
-// getBadges iterate over badges for user
-func getBadges(users map[string]*User, nick string, yield func(badge string)) error {
+// GetBadges iterate over badges for user
+func GetBadges(users map[string]*User, nick string, yield func(badge string)) error {
 	const op = "chat.GetBadges"
 
 	user, ok := users[nick]
@@ -63,9 +63,7 @@ func getBadges(users map[string]*User, nick string, yield func(badge string)) er
 		return fmt.Errorf("%s: user not found", op)
 	}
 
-	for _, badge := range user.Badges {
-		yield(badge)
-	}
+	user.badges.ForEach(yield)
 
 	return nil
 }

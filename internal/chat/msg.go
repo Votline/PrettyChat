@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"fmt"
 	"unsafe"
+
+	rb "prcht/internal/ringbuffer"
 )
 
 // ChatMessage contains data for one message
@@ -14,7 +16,7 @@ type ChatMessage struct {
 	Nick   *string
 	Msg    *string
 	Join   []byte
-	Status *[10]string
+	Status *rb.RingBuffer[string]
 }
 
 // ExtractMessage extract nick and msg from raw message
@@ -93,7 +95,7 @@ func extractMsg(rawMsg, join []byte, msg *string) error {
 
 // extractBadges find badges by 'badges=' pattern
 // and set state to subscriber, leadMod or moderator
-func extractBadges(rawMsg []byte, badges *[10]string) error {
+func extractBadges(rawMsg []byte, badges *rb.RingBuffer[string]) error {
 	const op = "chat.extractBadges"
 
 	contentStart := bytes.Index(rawMsg, []byte("badges="))
@@ -106,7 +108,7 @@ func extractBadges(rawMsg []byte, badges *[10]string) error {
 
 	rangeByByte(badgesContent, ',', func(badge []byte) {
 		badgeStr := unsafe.String(unsafe.SliceData(badge), len(badge))
-		badges[len(badges)-1] = badgeStr
+		badges.Write(badgeStr)
 	})
 
 	return nil

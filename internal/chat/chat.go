@@ -1,6 +1,8 @@
 package chat
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func PrintMessage(users *map[string]*User, chatMsg *ChatMessage, raw []byte) error {
 	const op = "chat.PrintMessage"
@@ -9,7 +11,7 @@ func PrintMessage(users *map[string]*User, chatMsg *ChatMessage, raw []byte) err
 		return fmt.Errorf("%s: error new message: %v", op, err)
 	}
 
-	fmt.Printf("%s %s\n", *chatMsg.Nick, *chatMsg.Msg)
+	fmt.Printf("%s: %s\n", *chatMsg.Nick, *chatMsg.Msg)
 
 	return nil
 }

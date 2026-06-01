@@ -98,13 +98,19 @@ func extractMsg(rawMsg, join []byte, msg *string) error {
 func extractBadges(rawMsg []byte, badges *rb.RingBuffer[string]) error {
 	const op = "chat.extractBadges"
 
-	contentStart := bytes.Index(rawMsg, []byte("badges="))
-	if contentStart == -1 {
+	start := bytes.Index(rawMsg, []byte("badges="))
+	if start == -1 {
 		return fmt.Errorf("%s: badges not found", op)
 	}
-	contentStart += len("badges=")
+	start += len("badges=")
 
-	badgesContent := rawMsg[contentStart:]
+	end := bytes.IndexByte(rawMsg[start:], ';')
+	if end == -1 {
+		return fmt.Errorf("%s: badges not found", op)
+	}
+	end += start
+
+	badgesContent := rawMsg[start:end]
 
 	rangeByByte(badgesContent, ',', func(badge []byte) {
 		badgeStr := unsafe.String(unsafe.SliceData(badge), len(badge))

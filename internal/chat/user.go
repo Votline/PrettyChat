@@ -4,15 +4,23 @@ package chat
 
 import (
 	"fmt"
+	"strings"
 
 	rb "prcht/internal/ringbuffer"
 )
 
+const (
+	flagSubscriber = 1 << iota
+	flagModerator
+	flagLeadModerator
+	flagVip
+)
+
 // User represents user in chat
 type User struct {
-	nick   string
-	badges *rb.RingBuffer[string]
-	msgs   *rb.RingBuffer[string]
+	nick     string
+	marksMap uint8 // subscriber, moderator, leadModerator, vip
+	msgs     *rb.RingBuffer[string]
 }
 
 // newMessage create new message for user or update existing
@@ -26,18 +34,17 @@ func newMessage(users map[string]*User, chatmsg *ChatMessage, rawMsg []byte) err
 	user, ok := users[*chatmsg.Nick]
 	if !ok {
 		msgs := rb.NewRB[string](100)
-		userBadges := rb.NewRB[string](10)
-		chatmsg.Status.ForEach(userBadges.Write)
 
 		user = &User{
-			nick:   *chatmsg.Nick,
-			badges: userBadges,
-			msgs:   msgs,
+			nick:     *chatmsg.Nick,
+			marksMap: 0,
+			msgs:     msgs,
 		}
 		users[*chatmsg.Nick] = user
 	}
 
 	user.msgs.Write(*chatmsg.Msg)
+	fillMarks(user, chatmsg)
 
 	return nil
 }
@@ -56,16 +63,22 @@ func GetMessages(users map[string]*User, nick string, yield func(msg string)) er
 	return nil
 }
 
-// GetBadges iterate over badges for user
-func GetBadges(users map[string]*User, nick string, yield func(badge string)) error {
-	const op = "chat.GetBadges"
+func fillMarks(user *User, chatmsg *ChatMessage) {
+	user.marksMap = 0
+	chatmsg.Status.ForEach(func(badge string) {
+		if idx := strings.IndexByte(badge, '/'); idx != -1 {
+			badge = badge[:idx]
+		}
 
-	user, ok := users[nick]
-	if !ok {
-		return fmt.Errorf("%s: user not found", op)
-	}
-
-	user.badges.ForEach(yield)
-
-	return nil
+		switch badge {
+		case "subscriber":
+			user.marksMap |= flagSubscriber
+		case "moderator":
+			user.marksMap |= flagModerator
+		case "lead_moderator":
+			user.marksMap |= flagLeadModerator
+		case "vip":
+			user.marksMap |= flagVip
+		}
+	})
 }

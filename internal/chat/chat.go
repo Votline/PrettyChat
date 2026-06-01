@@ -2,7 +2,6 @@ package chat
 
 import (
 	"fmt"
-	"strings"
 )
 
 func PrintMessage(users *map[string]*User, chatMsg *ChatMessage, raw []byte) error {
@@ -22,30 +21,26 @@ func PrintMessage(users *map[string]*User, chatMsg *ChatMessage, raw []byte) err
 func prettyPrint(users *map[string]*User, chatMsg *ChatMessage, raw []byte) error {
 	const op = "chat.PrettyPrint"
 
-	mark := make(map[string]struct{})
-
-	if err := GetBadges(*users, *chatMsg.Nick, func(badge string) {
-		if idx := strings.IndexByte(badge, '/'); idx != -1 {
-			badge = badge[:idx]
-		}
-
-		switch badge {
-		case "subscriber":
-			mark["S"] = struct{}{}
-		case "moderator":
-			mark["M"] = struct{}{}
-		case "lead_moderator":
-			mark["LM"] = struct{}{}
-		case "vip":
-			mark["V"] = struct{}{}
-		}
-	}); err != nil {
-		return fmt.Errorf("%s: error get badges: %v", op, err)
+	user, ok := (*users)[*chatMsg.Nick]
+	if !ok {
+		return fmt.Errorf("%s: user not found", op)
 	}
 
 	markStr := ""
-	for k := range mark {
-		markStr += k + " "
+	if user.marksMap&flagLeadModerator != 0 {
+		markStr += "LM"
+	}
+	if user.marksMap&flagModerator != 0 {
+		markStr += "M"
+	}
+	if user.marksMap&flagSubscriber != 0 {
+		markStr += "S"
+	}
+	if user.marksMap&flagVip != 0 {
+		markStr += "V"
+	}
+	if len(markStr) > 0 {
+		markStr += " "
 	}
 
 	fmt.Printf("%s%s %s\n", markStr, *chatMsg.Nick, *chatMsg.Msg)

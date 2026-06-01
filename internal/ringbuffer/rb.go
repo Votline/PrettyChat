@@ -52,31 +52,43 @@ func (b *RingBuffer[T]) Write(val string) {
 // Returns number of float32s read.
 func (b *RingBuffer[T]) Read(p *string) int {
 	for {
+		if b.IsClosed() {
+			return -1
+		}
+
 		w := atomic.LoadUint64(&b.wPos)
 		r := atomic.LoadUint64(&b.rPos)
 
-		available := w - r
-		if available > 0 {
-			n := min(uint64(len(*p)), available)
-
-			pos := r % b.bufSize
-
-			*p = b.buf[pos]
-
-			atomic.AddUint64(&b.rPos, n)
-			return int(n)
+		if r >= w {
+			return 0
 		}
 
-		if b.IsClosed() {
-			return -1
+		if (w - r) > b.bufSize {
+			atomic.StoreUint64(&b.rPos, w-b.bufSize)
+			continue
+		}
+
+		val := b.buf[r%b.bufSize]
+
+		if atomic.CompareAndSwapUint64(&b.rPos, r, r+1) {
+			*p = val
+			return 1
 		}
 	}
 }
 
 // ForEach iterates over all values in the buffer.
 func (b *RingBuffer[T]) ForEach(yield func(val string)) {
-	for i := 0; i < b.Len(); i++ {
-		yield(b.buf[(b.rPos+uint64(i))%b.bufSize])
+	w := atomic.LoadUint64(&b.wPos)
+	r := atomic.LoadUint64(&b.rPos)
+
+	start := r
+	if (w - r) > b.bufSize {
+		start = w - b.bufSize
+	}
+
+	for i := start; i < w; i++ {
+		yield(b.buf[i%b.bufSize])
 	}
 }
 

@@ -125,6 +125,10 @@ func main() {
 			case <-ctx.Done():
 				return
 			default:
+				*chatMsg.Nick = ""
+				*chatMsg.Msg = ""
+				chatMsg.Status.Reset()
+
 				_, message, err := conn.ReadMessage()
 				if err != nil {
 					err = fmt.Errorf("%s: error reading message: %v", op, err)
@@ -148,9 +152,6 @@ func main() {
 						zap.Error(err))
 					continue
 				}
-				*chatMsg.Nick = ""
-				*chatMsg.Msg = ""
-				chatMsg.Status.Reset()
 			}
 		}
 	}()

@@ -26,10 +26,12 @@ func newMessage(users map[string]*User, chatmsg *ChatMessage, rawMsg []byte) err
 	user, ok := users[*chatmsg.Nick]
 	if !ok {
 		msgs := rb.NewRB[string](100)
+		userBadges := rb.NewRB[string](10)
+		chatmsg.Status.ForEach(userBadges.Write)
 
 		user = &User{
 			nick:   *chatmsg.Nick,
-			badges: chatmsg.Status,
+			badges: userBadges,
 			msgs:   msgs,
 		}
 		users[*chatmsg.Nick] = user

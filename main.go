@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"prcht/internal/authserver"
@@ -45,6 +47,10 @@ Other arguments:
 
 func main() {
 	const op = "main.main"
+
+	go func() {
+		fmt.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	args := os.Args[1:]
 	if args[0] == "help" || args[0] == "-h" {
@@ -104,11 +110,12 @@ func main() {
 	errChan := make(chan error, 2)
 
 	chatMsg := chat.ChatMessage{
-		Nick:  new(string),
-		Msg:   new(string),
-		Join:  []byte("#" + ud.Join + " :"),
-		State: new(int),
+		Nick:   new(string),
+		Msg:    new(string),
+		Join:   []byte("#" + ud.Join + " :"),
+		Status: new([10]string),
 	}
+	users := make(map[string]*chat.User)
 	go func() {
 		defer close(errChan)
 		defer cancel()
@@ -133,7 +140,7 @@ func main() {
 					continue
 				}
 
-				if err := chat.ExtractMessage(&chatMsg, message); err != nil {
+				if err := chat.PrintMessage(&users, &chatMsg, message); err != nil {
 					log.Error("error extarct message",
 						zap.String("op", op),
 						zap.String("msg", string(message)),
@@ -143,7 +150,7 @@ func main() {
 				fmt.Println(*chatMsg.Nick, *chatMsg.Msg)
 				*chatMsg.Nick = ""
 				*chatMsg.Msg = ""
-				*chatMsg.State = 0
+				*chatMsg.Status = [10]string{}
 			}
 		}
 	}()

@@ -1,4 +1,4 @@
-// Package main do nothing
+// Package main is a simple IRC client for Twitch chat.
 package main
 
 import (
@@ -8,27 +8,64 @@ import (
 	"os"
 	"unsafe"
 
+	"prcht/internal/userdata"
+
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
+
+const helpMsg = `
+Usage (choose your way):
+    1. From config file: prcht <config_path> <args>
+    2. From config in args: prcht "[config]...[\config]" <args>
+    3. From argumens: prcht <PASS> <NICK> <JOIN> <args>
+    4. Help message: prcht -h or prcht help
+
+Needed arguments & config fields:
+    PASS: Access token of your Twitch account (e.g. oauth:1234abcd)
+    NICK: Your Twitch username
+    JOIN: Channel name to join (e.g. #channel)
+
+Other arguments:
+    -h/help: Show help message
+    -d/debug: Enable debug mode
+`
 
 func main() {
 	const op = "main.main"
 
-	url := "wss://irc-ws.chat.twitch.tv:443"
-	dialer := websocket.DefaultDialer
-	conn, resp, err := dialer.Dial(url, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: error dialing: %v", op, err)
+	args := os.Args[1:]
+	if args[0] == "help" || args[0] == "-h" {
+		fmt.Print(helpMsg)
 		return
+	}
+
+	ud, err := userdata.Parse(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: error parsing args: %v\n", op, err)
+		return
+	}
+	log := initLog(ud.Debug)
+	log.Debug("User data",
+		zap.String("PASS", ud.Pass),
+		zap.String("NICK", ud.Nick),
+		zap.String("JOIN", ud.Join))
+
+	conn, err := establishConnect()
+	if err != nil {
+		log.Fatal("error establishing connection",
+			zap.String("op", op),
+			zap.Error(err))
 	}
 	defer conn.Close()
+	log.Debug("Successfully connected")
 
-	if resp.StatusCode != 101 {
-		fmt.Fprintf(os.Stderr, "%s: unexpected status code: %v", op, resp.StatusCode)
-		return
+	if err := sendUserData(conn, ud); err != nil {
+		log.Fatal("send user data",
+			zap.String("op", op),
+			zap.Error(err))
 	}
-
-	fmt.Println("Connected to the server")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -80,9 +117,55 @@ func main() {
 
 	select {
 	case err := <-errChan:
-		fmt.Fprintln(os.Stderr, err)
-		return
+		log.Fatal("error",
+			zap.String("op", op),
+			zap.Error(err))
 	case <-ctx.Done():
-		fmt.Println("Connection closed")
+		log.Debug("Successfully disconnected")
 	}
+}
+
+func sendUserData(conn *websocket.Conn, ud *userdata.UserData) error {
+	const op = "main.sendUserData"
+
+	msg := fmt.Appendf(nil, "PASS %s\r\nNICK %s\r\nJOIN %s\r\n",
+		ud.Pass, ud.Nick, ud.Join)
+	if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+		return fmt.Errorf("%s: error writing message: %v", op, err)
+	}
+	return nil
+}
+
+func establishConnect() (*websocket.Conn, error) {
+	const op = "main.establishConnect"
+
+	url := "wss://irc-ws.chat.twitch.tv:443"
+	dialer := websocket.DefaultDialer
+	conn, resp, err := dialer.Dial(url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%s: error dialing: %v", op, err)
+	}
+
+	if resp.StatusCode != 101 {
+		return nil, fmt.Errorf("%s: unexpected status code: %v", op, resp.StatusCode)
+	}
+
+	return conn, nil
+}
+
+func initLog(dbg bool) *zap.Logger {
+	cfg := zap.NewDevelopmentConfig()
+	cfg.Encoding = "console"
+	cfg.EncoderConfig.TimeKey = ""
+	cfg.DisableStacktrace = true
+	cfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	cfg.EncoderConfig.ConsoleSeparator = " | "
+	cfg.Level.SetLevel(zap.ErrorLevel)
+
+	if dbg {
+		cfg.Level.SetLevel(zap.DebugLevel)
+	}
+	log, _ := cfg.Build()
+
+	return log
 }

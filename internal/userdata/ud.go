@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"unsafe"
 
 	"github.com/Votline/Gurlf"
@@ -14,10 +15,13 @@ import (
 )
 
 type UserData struct {
-	Pass  string `gurlf:"PASS"`
-	Nick  string `gurlf:"NICK"`
-	Join  string `gurlf:"JOIN"`
-	Debug bool
+	Pass         string `gurlf:"PASS"`
+	Nick         string `gurlf:"NICK"`
+	Join         string `gurlf:"JOIN"`
+	ClientID     string
+	ClientSecret string
+	Debug        bool
+	Auth         bool
 }
 
 func Parse(args []string) (*UserData, error) {
@@ -31,6 +35,17 @@ func Parse(args []string) (*UserData, error) {
 	dbgMode := slices.Contains(args, "-d") || slices.Contains(args, "debug")
 	if dbgMode {
 		ud.Debug = true
+	}
+
+	authMode := slices.Contains(args, "-a") || slices.Contains(args, "auth")
+	if authMode {
+		ud.Auth = true
+		if len(args) < 3 {
+			return nil, fmt.Errorf("%s: missing arguments for auth mode", op)
+		}
+		ud.ClientID = args[1]
+		ud.ClientSecret = args[2]
+		return &ud, nil
 	}
 
 	if len(args) >= 3 {
@@ -57,6 +72,16 @@ func Parse(args []string) (*UserData, error) {
 
 	if err := gurlf.Unmarshal(sections[0], &ud); err != nil {
 		return nil, fmt.Errorf("%s: unmarshal: %v", op, err)
+	}
+	for _, arg := range args {
+		idx := strings.Index(arg, "-j=")
+		if idx != -1 {
+			idx = strings.Index(arg, "join=")
+			if idx != -1 {
+				continue
+			}
+		}
+		ud.Join = arg[idx+3:]
 	}
 
 	errMsg := ""

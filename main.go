@@ -8,6 +8,7 @@ import (
 	"os"
 	"unsafe"
 
+	"prcht/internal/authserver"
 	"prcht/internal/userdata"
 
 	"github.com/gorilla/websocket"
@@ -27,9 +28,18 @@ Needed arguments & config fields:
     NICK: Your Twitch username
     JOIN: Channel name to join (e.g. #channel)
 
+How to get PASS and NICK:
+    1. Run app with args: 'prcht -i <clientID> <clientSecret> <args>'
+    2. Open URL from console in browser (if it not opened automatically)
+    3. Click 'Allow' button
+    4. App will print and save to file your PASS
+    5. Next time you can run app with new config file (prcht.gurlf)
+
 Other arguments:
     -h/help: Show help message
     -d/debug: Enable debug mode
+    -a/auth: Start HTTP server for exchanging code to tokens
+    -j=/join=: Dynamically change 'JOIN' argument. Usage: 'prcht cfg.gurlf -j=bratishkinoff'
 `
 
 func main() {
@@ -47,6 +57,12 @@ func main() {
 		return
 	}
 	log := initLog(ud.Debug)
+
+	if ud.Auth {
+		authserver.StartServer(ud.ClientID, ud.ClientSecret, log)
+		return
+	}
+
 	log.Debug("User data",
 		zap.String("PASS", ud.Pass),
 		zap.String("NICK", ud.Nick),
@@ -125,17 +141,6 @@ func main() {
 	}
 }
 
-func sendUserData(conn *websocket.Conn, ud *userdata.UserData) error {
-	const op = "main.sendUserData"
-
-	msg := fmt.Appendf(nil, "PASS %s\r\nNICK %s\r\nJOIN %s\r\n",
-		ud.Pass, ud.Nick, ud.Join)
-	if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-		return fmt.Errorf("%s: error writing message: %v", op, err)
-	}
-	return nil
-}
-
 func establishConnect() (*websocket.Conn, error) {
 	const op = "main.establishConnect"
 
@@ -151,6 +156,17 @@ func establishConnect() (*websocket.Conn, error) {
 	}
 
 	return conn, nil
+}
+
+func sendUserData(conn *websocket.Conn, ud *userdata.UserData) error {
+	const op = "main.sendUserData"
+
+	msg := fmt.Appendf(nil, "PASS %s\r\nNICK %s\r\nJOIN %s\r\n",
+		ud.Pass, ud.Nick, ud.Join)
+	if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+		return fmt.Errorf("%s: error writing message: %v", op, err)
+	}
+	return nil
 }
 
 func initLog(dbg bool) *zap.Logger {

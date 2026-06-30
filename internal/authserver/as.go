@@ -201,7 +201,7 @@ func writeData(tokens *TokenResponse, cID string) error {
 
 	username, errUserName := getUsername(tokens.AccessToken, cID)
 
-	data := fmt.Sprintf("[PrettyChatConfig]\nPASS:oauth:%s\nNICK:%s\nJOIN:\n[\\PrettyChatConfig]\n",
+	data := fmt.Sprintf("[PrettyChatConfig]\nPASS:%s\nNICK:%s\nJOIN:\n[\\PrettyChatConfig]\n",
 		tokens.AccessToken, username)
 	dataBytes := unsafe.Slice(unsafe.StringData(data), len(data))
 

@@ -26,7 +26,7 @@ Usage (choose your way):
 Needed arguments & config fields:
     PASS: Access token of your Twitch account (e.g. oauth:1234abcd)
     NICK: Your Twitch username
-    JOIN: Channel name to join (e.g. #channel)
+    JOIN: Channel name to join (e.g. bratishkinoff)
 
 How to get PASS and NICK:
     1. Run app with args: 'prcht -i <clientID> <clientSecret> <args>'
@@ -60,6 +60,21 @@ func main() {
 
 	if ud.Auth {
 		authserver.StartServer(ud.ClientID, ud.ClientSecret, log)
+		return
+	}
+
+	errMsg := ""
+	if ud.Pass == "" {
+		errMsg += "missing PASS "
+	}
+	if ud.Nick == "" {
+		errMsg += "missing NICK "
+	}
+	if ud.Join == "" {
+		errMsg += "missing JOIN "
+	}
+	if errMsg != "" {
+		fmt.Fprintf(os.Stderr, "%s: error parsing args: %s\n", op, errMsg)
 		return
 	}
 
@@ -161,11 +176,21 @@ func establishConnect() (*websocket.Conn, error) {
 func sendUserData(conn *websocket.Conn, ud *userdata.UserData) error {
 	const op = "main.sendUserData"
 
-	msg := fmt.Appendf(nil, "PASS %s\r\nNICK %s\r\nJOIN %s\r\n",
-		ud.Pass, ud.Nick, ud.Join)
-	if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-		return fmt.Errorf("%s: error writing message: %v", op, err)
+	passCmd := "PASS oauth:" + ud.Pass
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(passCmd)); err != nil {
+		return fmt.Errorf("%s: error writing PASS: %v", op, err)
 	}
+
+	nickCmd := "NICK " + ud.Nick
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(nickCmd)); err != nil {
+		return fmt.Errorf("%s: error writing NICK: %v", op, err)
+	}
+
+	joinCmd := "JOIN #" + ud.Join
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(joinCmd)); err != nil {
+		return fmt.Errorf("%s: error writing JOIN: %v", op, err)
+	}
+
 	return nil
 }
 

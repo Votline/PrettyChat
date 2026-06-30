@@ -5,7 +5,6 @@ package userdata
 
 import (
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"unsafe"
@@ -48,55 +47,48 @@ func Parse(args []string) (*UserData, error) {
 		return &ud, nil
 	}
 
+	configPath := args[0]
+	var sections []gScan.Data
+	sections, err := gurlf.ScanFile(configPath)
+	if err == nil {
+		if err = configResult(&ud, sections, args[1:]); err != nil {
+			return nil, fmt.Errorf("%s: configResult: %v", op, err)
+		}
+		return &ud, nil
+	}
+	configData := unsafe.Slice(unsafe.StringData(configPath), len(configPath))
+	sections, err = gurlf.Scan(configData)
+	if err == nil {
+		if err = configResult(&ud, sections, args[1:]); err != nil {
+			return nil, fmt.Errorf("%s: configResult: %v", op, err)
+		}
+		return &ud, nil
+	}
+
 	if len(args) >= 3 {
 		ud.Pass = args[0]
 		ud.Nick = args[1]
 		ud.Join = args[2]
-		return &ud, nil
-	}
-
-	configPath := args[0]
-	var sections []gScan.Data
-	if _, err := os.Stat(configPath); err == nil {
-		sections, err = gurlf.ScanFile(configPath)
-		if err != nil {
-			return nil, fmt.Errorf("%s: scan config: %v", op, err)
-		}
-	} else {
-		configData := unsafe.Slice(unsafe.StringData(configPath), len(configPath))
-		sections, err = gurlf.Scan(configData)
-		if err != nil {
-			return nil, fmt.Errorf("%s: scan args: %v", op, err)
-		}
-	}
-
-	if err := gurlf.Unmarshal(sections[0], &ud); err != nil {
-		return nil, fmt.Errorf("%s: unmarshal: %v", op, err)
-	}
-	for _, arg := range args {
-		idx := strings.Index(arg, "-j=")
-		if idx != -1 {
-			idx = strings.Index(arg, "join=")
-			if idx != -1 {
-				continue
-			}
-		}
-		ud.Join = arg[idx+3:]
-	}
-
-	errMsg := ""
-	if ud.Pass == "" {
-		errMsg += "missing PASS "
-	}
-	if ud.Nick == "" {
-		errMsg += "missing NICK "
-	}
-	if ud.Join == "" {
-		errMsg += "missing JOIN "
-	}
-	if errMsg != "" {
-		return nil, fmt.Errorf("%s: missing arguments: %s", op, errMsg)
 	}
 
 	return &ud, nil
+}
+
+func configResult(ud *UserData, sections []gScan.Data, args []string) error {
+	const op = "userdata.configResult"
+
+	if len(sections) == 0 {
+		return fmt.Errorf("%s: no sections found", op)
+	}
+
+	if err := gurlf.Unmarshal(sections[0], ud); err != nil {
+		return fmt.Errorf("%s: unmarshal: %v", op, err)
+	}
+	for _, arg := range args {
+		if prefix, ok := strings.CutPrefix(arg, "-j="); ok {
+			ud.Join = prefix
+			continue
+		}
+	}
+	return nil
 }

@@ -3,12 +3,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"unsafe"
 
 	"prcht/internal/authserver"
+	"prcht/internal/chat"
 	"prcht/internal/userdata"
 
 	"github.com/gorilla/websocket"
@@ -100,8 +101,14 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	errChan := make(chan error)
+	errChan := make(chan error, 2)
 
+	chatMsg := chat.ChatMessage{
+		Nick:  new(string),
+		Msg:   new(string),
+		Join:  []byte("#" + ud.Join + " :"),
+		State: new(int),
+	}
 	go func() {
 		defer close(errChan)
 		defer cancel()
@@ -116,7 +123,27 @@ func main() {
 					errChan <- err
 					return
 				}
-				fmt.Println(unsafe.String(unsafe.SliceData(message), len(message)))
+
+				if bytes.HasPrefix(message, []byte("PING")) {
+					if err := conn.WriteMessage(websocket.TextMessage, []byte("PONG")); err != nil {
+						err = fmt.Errorf("%s: error writing message: %v", op, err)
+						errChan <- err
+						return
+					}
+					continue
+				}
+
+				if err := chat.ExtractMessage(&chatMsg, message); err != nil {
+					log.Error("error extarct message",
+						zap.String("op", op),
+						zap.String("msg", string(message)),
+						zap.Error(err))
+					continue
+				}
+				fmt.Println(*chatMsg.Nick, *chatMsg.Msg)
+				*chatMsg.Nick = ""
+				*chatMsg.Msg = ""
+				*chatMsg.State = 0
 			}
 		}
 	}()
@@ -175,6 +202,10 @@ func establishConnect() (*websocket.Conn, error) {
 
 func sendUserData(conn *websocket.Conn, ud *userdata.UserData) error {
 	const op = "main.sendUserData"
+
+	if err := conn.WriteMessage(websocket.TextMessage, []byte("CAP REQ :twitch.tv/tags twitch.tv/commands")); err != nil {
+		return fmt.Errorf("%s: error requesting tags: %v", op, err)
+	}
 
 	passCmd := "PASS oauth:" + ud.Pass
 	if err := conn.WriteMessage(websocket.TextMessage, []byte(passCmd)); err != nil {

@@ -190,7 +190,7 @@ func getUsername(accessToken, cID string) (string, error) {
 	}
 
 	if len(result.Data) == 0 {
-		return "", fmt.Errorf("%s: no data in resonse", op)
+		return "", fmt.Errorf("%s: no data in response", op)
 	}
 
 	return result.Data[0].DisplayName, nil
